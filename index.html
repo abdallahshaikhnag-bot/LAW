@@ -178,6 +178,25 @@
         // Listen to Auth State persistence lifecycle automatically on browser start
         window.addEventListener('DOMContentLoaded', async () => {
             const { data: { session }, error } = await supabase.auth.getSession();
+            
+            // [UPDATED] 1. Detect if the user just arrived from an email invitation link
+            const urlParams = new URLSearchParams(window.location.hash.replace('#', '?'));
+            const isInviteLink = urlParams.has('access_token') && urlParams.get('type') === 'invite';
+
+            if (isInviteLink) {
+                // Prompt them to create a secure password right away
+                const newPassword = prompt("Welcome to LexImperium! Please establish your secure portal password:");
+                if (newPassword) {
+                    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+                    if (updateError) {
+                        alert("Password configuration failed: " + updateError.message);
+                    } else {
+                        alert("Account secured successfully! Welcome to your workspace.");
+                    }
+                }
+            }
+
+            // 2. Layout routing logic
             if (session && session.user) {
                 currentUser = { email: session.user.email, id: session.user.id };
                 initApp();
@@ -280,7 +299,6 @@
 
         // ================= DASHBOARD MODULE =================
         async function renderDashboard() {
-            // Read aggregate table values directly via real-time active RLS contexts
             const { data: clients } = await supabase.from('clients').select('*');
             const { data: cases } = await supabase.from('cases').select('*');
             const { data: hearings } = await supabase.from('hearings').select('*');
@@ -517,9 +535,9 @@
                         <input type="text" value="${caseSearchQuery}" oninput="searchCases(this.value)" class="w-full max-w-xs pl-4 pr-4 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-300" placeholder="Search case titles...">
                         <select onchange="filterCasesStatus(this.value)" class="bg-slate-950 border border-slate-800 text-xs text-slate-300 rounded-lg p-2">
                             <option value="All" ${caseStatusFilter === 'All' ? 'selected' : ''}>Show All Portfolios</option>
-                            <option value="Pending" ${caseStatusFilter === 'Pending' ? 'selected' : ''}>Pending (Yellow)</option>
-                            <option value="Active" ${caseStatusFilter === 'Active' ? 'selected' : ''}>Active (Blue)</option>
-                            <option value="Closed" ${caseStatusFilter === 'Closed' ? 'selected' : ''}>Closed (Green)</option>
+                            <option value="Pending" ${caseStatusFilter === 'Pending' ? 'selected' : ''}>Pending</option>
+                            <option value="Active" ${caseStatusFilter === 'Active' ? 'selected' : ''}>Active</option>
+                            <option value="Closed" ${caseStatusFilter === 'Closed' ? 'selected' : ''}>Closed</option>
                         </select>
                     </div>
                     <div class="overflow-x-auto">
@@ -562,9 +580,9 @@
                     <div>
                         <label class="block text-[11px] uppercase text-slate-400 mb-1.5">Status Designation</label>
                         <select id="form-case-status" class="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-200">
-                            <option value="Pending" ${status === 'Pending' ? 'selected' : ''}>Pending (Yellow Badge UI View)</option>
-                            <option value="Active" ${status === 'Active' ? 'selected' : ''}>Active (Blue Badge UI View)</option>
-                            <option value="Closed" ${status === 'Closed' ? 'selected' : ''}>Closed (Green Badge UI View)</option>
+                            <option value="Pending" ${status === 'Pending' ? 'selected' : ''}>Pending</option>
+                            <option value="Active" ${status === 'Active' ? 'selected' : ''}>Active</option>
+                            <option value="Closed" ${status === 'Closed' ? 'selected' : ''}>Closed</option>
                         </select>
                     </div>
                     <div class="pt-4 flex items-center justify-end gap-3 border-t border-slate-800">
@@ -747,7 +765,6 @@
 
             const fileId = Date.now() + '_' + file.name;
             
-            // 1. Upload raw payload binary object directly to Supabase Storage Bucket
             const { data: storageData, error: storageError } = await supabase.storage
                 .from('case-documents')
                 .upload(fileId, file);
@@ -757,10 +774,8 @@
                 return;
             }
 
-            // 2. Resolve structural Public Download Link url tracking string reference
             const { data: urlData } = supabase.storage.from('case-documents').getPublicUrl(fileId);
 
-            // 3. Write metadata row tracking connection data to standard documents table reference
             await supabase.from('documents').insert([{
                 user_id: currentUser.email,
                 file_name: file.name,
