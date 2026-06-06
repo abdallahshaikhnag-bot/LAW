@@ -166,18 +166,18 @@
 
     <script>
         // --- SUPABASE LIVE CONNECTION CONFIGURATION ---
-        const SUPABASE_URL = 'https://trffszwncbswfsblftzr.supabase.co/rest/v1/'; // <-- Replace with your real Supabase Project URL
+        const SUPABASE_URL = 'https://trffszwncbswfsblftzr.supabase.co'; // <-- Replace with your real Supabase Project URL
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRyZmZzenduY2Jzd2ZzYmxmdHpyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1NjMzMjEsImV4cCI6MjA5NjEzOTMyMX0.Pk7bk4hzDdGM9vjyHunBiRuB7Aa77iuKY8pe7i1TCJY'; // <-- Replace with your real Project API Anon Key
 
         // Initialize Supabase Client
-        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         let currentUser = null;
         let currentView = 'dashboard';
 
         // Listen to Auth State persistence lifecycle automatically on browser start
         window.addEventListener('DOMContentLoaded', async () => {
-            const { data: { session }, error } = await supabase.auth.getSession();
+            const { data: { session }, error } = await supabaseClient.auth.getSession();
             
             // [UPDATED] 1. Detect if the user just arrived from an email invitation link
             const urlParams = new URLSearchParams(window.location.hash.replace('#', '?'));
@@ -187,7 +187,7 @@
                 // Prompt them to create a secure password right away
                 const newPassword = prompt("Welcome to LexImperium! Please establish your secure portal password:");
                 if (newPassword) {
-                    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+                    const { error: updateError } = await supabaseClient.auth.updateUser({ password: newPassword });
                     if (updateError) {
                         alert("Password configuration failed: " + updateError.message);
                     } else {
@@ -214,7 +214,7 @@
             const errBox = document.getElementById('login-error');
             const errText = document.getElementById('error-message-text');
 
-            const { data, error } = await supabase.auth.signInWithPassword({
+            const { data, error } = await supabaseClient.auth.signInWithPassword({
                 email,
                 password
             });
@@ -234,7 +234,7 @@
         }
 
         async function handleLogout() {
-            await supabase.auth.signOut();
+            await supabaseClient.auth.signOut();
             currentUser = null;
             document.getElementById('auth-page').classList.remove('hidden');
             document.getElementById('app-layout').classList.add('hidden');
@@ -299,9 +299,9 @@
 
         // ================= DASHBOARD MODULE =================
         async function renderDashboard() {
-            const { data: clients } = await supabase.from('clients').select('*');
-            const { data: cases } = await supabase.from('cases').select('*');
-            const { data: hearings } = await supabase.from('hearings').select('*');
+            const { data: clients } = await supabaseClient.from('clients').select('*');
+            const { data: cases } = await supabaseClient.from('cases').select('*');
+            const { data: hearings } = await supabaseClient.from('hearings').select('*');
 
             const totalClients = clients ? clients.length : 0;
             const totalCases = cases ? cases.length : 0;
@@ -388,7 +388,7 @@
         let clientSearchQuery = "";
 
         async function renderClients() {
-            let query = supabase.from('clients').select('*');
+            let query = supabaseClient.from('clients').select('*');
             
             if(clientSearchQuery) {
                 query = query.ilike('client_name', `%${clientSearchQuery}%`);
@@ -468,9 +468,9 @@
             const phone = document.getElementById('form-client-phone').value.trim();
 
             if (id && id !== 'null' && id !== '') {
-                await supabase.from('clients').update({ client_name: name, phone: phone }).eq('id', id);
+                await supabaseClient.from('clients').update({ client_name: name, phone: phone }).eq('id', id);
             } else {
-                await supabase.from('clients').insert([{ user_id: currentUser.email, client_name: name, phone: phone }]);
+                await supabaseClient.from('clients').insert([{ user_id: currentUser.id, client_name: name, phone: phone }]);
             }
             closeModal();
             await renderClients();
@@ -478,7 +478,7 @@
 
         async function deleteClient(id) {
             if(confirm("Confirm destructive erasure of this client configuration model?")) {
-                await supabase.from('clients').delete().eq('id', id);
+                await supabaseClient.from('clients').delete().eq('id', id);
                 await renderClients();
             }
         }
@@ -488,7 +488,7 @@
         let caseStatusFilter = "All";
 
         async function renderCases() {
-            let query = supabase.from('cases').select('*');
+            let query = supabaseClient.from('cases').select('*');
 
             if(caseStatusFilter !== "All") {
                 query = query.eq('status', caseStatusFilter);
@@ -602,9 +602,9 @@
             const status = document.getElementById('form-case-status').value;
 
             if(id && id !== 'null' && id !== '') {
-                await supabase.from('cases').update({ case_number: num, case_title: title, case_date: date, status: status }).eq('id', id);
+                await supabaseClient.from('cases').update({ case_number: num, case_title: title, case_date: date, status: status }).eq('id', id);
             } else {
-                await supabase.from('cases').insert([{ user_id: currentUser.email, case_number: num, case_title: title, case_date: date, status: status }]);
+                await supabaseClient.from('cases').insert([{ user_id: currentUser.id, case_number: num, case_title: title, case_date: date, status: status }]);
             }
             closeModal();
             await renderCases();
@@ -612,14 +612,14 @@
 
         async function deleteCase(id) {
             if(confirm("Confirm deletion of this database record row?")) {
-                await supabase.from('cases').delete().eq('id', id);
+                await supabaseClient.from('cases').delete().eq('id', id);
                 await renderCases();
             }
         }
 
         // ================= HEARINGS MODULE =================
         async function renderHearings() {
-            const { data } = await supabase.from('hearings').select('*');
+            const { data } = await supabaseClient.from('hearings').select('*');
             let agendaListHTML = '';
 
             if(!data || data.length === 0) {
@@ -689,9 +689,9 @@
             const court = document.getElementById('form-hearing-court').value.trim();
 
             if(id && id !== 'null' && id !== '') {
-                await supabase.from('hearings').update({ hearing_date: date, court_name: court }).eq('id', id);
+                await supabaseClient.from('hearings').update({ hearing_date: date, court_name: court }).eq('id', id);
             } else {
-                await supabase.from('hearings').insert([{ user_id: currentUser.email, hearing_date: date, court_name: court }]);
+                await supabaseClient.from('hearings').insert([{ user_id: currentUser.id, hearing_date: date, court_name: court }]);
             }
             closeModal();
             await renderHearings();
@@ -699,14 +699,14 @@
 
         async function deleteHearing(id) {
             if(confirm("Expunge this target hearing date completely?")) {
-                await supabase.from('hearings').delete().eq('id', id);
+                await supabaseClient.from('hearings').delete().eq('id', id);
                 await renderHearings();
             }
         }
 
         // ================= DOCUMENTS MODULE (SUPABASE STORAGE BUCKET) =================
         async function renderDocuments() {
-            const { data, error } = await supabase.from('documents').select('*');
+            const { data, error } = await supabaseClient.from('documents').select('*');
             let cardGridHTML = '';
 
             if(!data || data.length === 0) {
@@ -729,7 +729,7 @@
                             </div>
                             <div class="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-slate-900">
                                 <a href="${d.file_url}" target="_blank" class="text-[11px] bg-slate-950 border border-slate-800 text-slate-300 text-center py-1.5 rounded font-medium">Get File</a>
-                                <button onclick="deleteDocument('${d.id}', '${d.file_name}')" class="text-[11px] bg-slate-950 border border-slate-800 text-slate-500 py-1.5 rounded hover:text-rose-400">Erase</button>
+                                <button onclick="deleteDocument('${d.id}', '${d.file_path}')" class="text-[11px] bg-slate-950 border border-slate-800 text-slate-500 py-1.5 rounded hover:text-rose-400">Erase</button>
                             </div>
                         </div>
                     `;
@@ -765,7 +765,7 @@
 
             const fileId = Date.now() + '_' + file.name;
             
-            const { data: storageData, error: storageError } = await supabase.storage
+            const { data: storageData, error: storageError } = await supabaseClient.storage
                 .from('case-documents')
                 .upload(fileId, file);
 
@@ -774,21 +774,22 @@
                 return;
             }
 
-            const { data: urlData } = supabase.storage.from('case-documents').getPublicUrl(fileId);
+            const { data: urlData } = supabaseClient.storage.from('case-documents').getPublicUrl(fileId);
 
-            await supabase.from('documents').insert([{
-                user_id: currentUser.email,
+            await supabaseClient.from('documents').insert([{
+                user_id: currentUser.id,
                 file_name: file.name,
+                file_path: fileId,
                 file_url: urlData.publicUrl
             }]);
 
             await renderDocuments();
         }
 
-        async function deleteDocument(id, fileName) {
+        async function deleteDocument(id, filePath) {
             if(confirm("Confirm standard execution commands to purge this file payload object?")) {
-                await supabase.storage.from('case-documents').remove([fileName]);
-                await supabase.from('documents').delete().eq('id', id);
+                await supabaseClient.storage.from('case-documents').remove([filePath]);
+                await supabaseClient.from('documents').delete().eq('id', id);
                 await renderDocuments();
             }
         }
