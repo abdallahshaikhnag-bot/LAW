@@ -166,8 +166,8 @@
 
     <script>
         // --- SUPABASE LIVE CONNECTION CONFIGURATION ---
-        const SUPABASE_URL = 'https://trffszwncbswfsblftzr.supabase.co'; // <-- Replace with your real Supabase Project URL
-        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRyZmZzenduY2Jzd2ZzYmxmdHpyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1NjMzMjEsImV4cCI6MjA5NjEzOTMyMX0.Pk7bk4hzDdGM9vjyHunBiRuB7Aa77iuKY8pe7i1TCJY'; // <-- Replace with your real Project API Anon Key
+        const SUPABASE_URL = 'https://icubannrfuawithpnxil.supabase.co'; // <-- Replace with your real Supabase Project URL
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImljdWJhbm5yZnVhd2l0aHBueGlsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwNzAwNjAsImV4cCI6MjA5NTY0NjA2MH0.o7lSAIWmR_k5dOJr2u-1I3swDkzWQw56Z0EypzAhg6c'; // <-- Replace with your real Project API Anon Key
 
         // Initialize Supabase Client
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -325,7 +325,7 @@
                                 </div>
                                 <div class="truncate">
                                     <h4 class="text-sm font-semibold text-slate-200 truncate">${h.court_name}</h4>
-                                    <p class="text-xs text-slate-400 mt-0.5"><i class="fa-regular fa-clock text-law-gold mr-1"></i> ${dt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                                    <p class="text-xs text-slate-400 mt-0.5"><i class="fa-regular fa-clock text-law-gold mr-1"></i> ${h.hearing_date.slice(11,16)}</p>
                                 </div>
                             </div>
                         </div>
@@ -601,23 +601,93 @@
             const date = document.getElementById('form-case-date').value;
             const status = document.getElementById('form-case-status').value;
 
-            if(id && id !== 'null' && id !== '') {
-                await supabaseClient.from('cases').update({ case_number: num, case_title: title, case_date: date, status: status }).eq('id', id);
-            } else {
-                await supabaseClient.from('cases').insert([{ user_id: currentUser.id, case_number: num, case_title: title, case_date: date, status: status }]);
-            }
+            let result;
+
+if(id && id !== 'null' && id !== '') {
+
+    result = await supabaseClient
+    .from('cases')
+    .update({
+        case_number: num,
+        case_title: title,
+        case_date: date,
+        status: status
+    })
+    .eq('id', id);
+
+} else {
+
+    result = await supabaseClient
+    .from('cases')
+    .insert([{
+        user_id: currentUser.id,
+        case_number: num,
+        case_title: title,
+        case_date: date,
+        status: status
+    }]);
+}
+
+if(result.error){
+    alert("ERROR: " + result.error.message);
+    return;
+}
+
+alert("Case Saved Successfully");
             closeModal();
             await renderCases();
         }
-
+        let pendingDeleteCase = null;
+        let deleteTimer = null;
         async function deleteCase(id) {
             if(confirm("Confirm deletion of this database record row?")) {
+                const { data: caseData } = await supabaseClient
+               .from('cases')
+               .select('*')
+               .eq('id', id)
+               .single();
+
+            pendingDeleteCase = caseData;
                 await supabaseClient.from('cases').delete().eq('id', id);
                 await renderCases();
+                document.getElementById('undoBox').style.display = 'block';
+
+            clearTimeout(deleteTimer);
+
+            deleteTimer = setTimeout(() => {
+            pendingDeleteCase = null;
+            document.getElementById('undoBox').style.display = 'none';
+         }, 10000);
             }
         }
 
-        // ================= HEARINGS MODULE =================
+       async function undoDelete() {
+
+    if (!pendingDeleteCase) return;
+
+    const caseToRestore = { ...pendingDeleteCase };
+
+    delete caseToRestore.id;
+
+    const { error } = await supabaseClient
+        .from('cases')
+        .insert([caseToRestore]);
+
+    if (error) {
+        alert(error.message);
+        return;
+    }
+
+    pendingDeleteCase = null;
+
+    document.getElementById('undoBox').style.display = 'none';
+
+    clearTimeout(deleteTimer);
+
+    await renderCases();
+}
+
+        
         async function renderHearings() {
             const { data } = await supabaseClient.from('hearings').select('*');
             let agendaListHTML = '';
@@ -704,7 +774,7 @@
             }
         }
 
-        // ================= DOCUMENTS MODULE (SUPABASE STORAGE BUCKET) =================
+        
         async function renderDocuments() {
             const { data, error } = await supabaseClient.from('documents').select('*');
             let cardGridHTML = '';
@@ -794,7 +864,7 @@
             }
         }
 
-        // ================= SETTINGS INFO VIEW =================
+        
         function renderSettings() {
             document.getElementById('view-container').innerHTML = `
                 <div class="mb-6">
@@ -814,7 +884,7 @@
             `;
         }
 
-        // ================= GLOBAL MODAL MANAGEMENT =================
+        
         function showModal(htmlContent) {
             const wrap = document.getElementById('modal-wrapper');
             const inner = document.getElementById('modal-content');
@@ -848,5 +918,27 @@
     }
 }
     </script>
+    <div id="undoBox" style="
+    display:none;
+    position:fixed;
+    bottom:20px;
+    right:20px;
+    background:#333;
+    color:white;
+    padding:12px;
+    border-radius:8px;
+    z-index:9999;
+">
+    Case deleted
+    <button onclick="undoDelete()" style="
+        margin-left:10px;
+        background:orange;
+        border:none;
+        padding:5px 10px;
+        cursor:pointer;
+    ">
+        UNDO
+    </button>
+</div>
 </body>
 </html>
